@@ -1,0 +1,39 @@
+variable "OctopusPrintEvaluatedVariables" {
+    value "false" {}
+}
+
+variable "GitHub.Repo.ID" {
+    value "HuxleyKendell/AutoOctopus" {}
+}
+
+variable "Flyway.Database.Server" {
+    value "localhost:1433" {
+        description = ""
+
+        prompt {
+            description = "The MSSQL database hostname"
+            label = ""
+        }
+    }
+}
+
+variable "Flyway.Database.User" {
+    value "sa" {
+        prompt {
+            description = "The MSSQL database username"
+            label = ""
+            required = true
+        }
+    }
+}
+
+variable "Flyway.Octopus.Workerpool" {
+    type = "WorkerPool"
+
+    value "hosted-ubuntu" {
+        prompt {
+            description = ""
+            label = ""
+        }
+    }
+}

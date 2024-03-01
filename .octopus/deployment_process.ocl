@@ -1,0 +1,173 @@
+step "find-worker-ip-address" {
+    name = "Find Worker IP Address"
+
+    action {
+        action_type = "Octopus.Script"
+        properties = {
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                $ip=$(curl --silent ifconfig.net)
+                
+                echo "The worker's IP address $ip."
+                echo "Depending on the database server, this IP address will need to be added to the firewall. For example, Azure databases use the 'az sql server firewall-rule create' command to allow external access to an IP address. See https://learn.microsoft.com/en-us/cli/azure/sql/server/firewall-rule?view=azure-cli-latest#az-sql-server-firewall-rule-create for more information."
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "PowerShell"
+            OctopusUseBundledTooling = "False"
+        }
+        worker_pool_variable = "Flyway.Octopus.Workerpool"
+    }
+}
+
+step "build-stage" {
+    name = "Build Stage"
+
+    action {
+        action_type = "Octopus.Script"
+        environments = ["build"]
+        properties = {
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                $flyway_license_key = $OctopusParameters["Flyway.Settings.LicenseKey"]
+                $env_JDBC = "jdbc:sqlserver://$($OctopusParameters["Flyway.Database.Server"]);authentication=sqlPassword;databaseName=WidgetZBuild;encrypt=true;trustServerCertificate=true"
+                $FIRST_UNDO_SCRIPT = "002.20230703112421"
+                $user = $OctopusParameters["Flyway.Database.User"]
+                $password = $OctopusParameters["Flyway.Database.Password"]
+                
+                
+                
+                $extractPath = $OctopusParameters["Octopus.Action.Package[AutoOctopus].ExtractedPath"]
+                Write-Verbose $extractPath
+                $migrationsPath = Join-Path -Path $extractPath -ChildPath "migrations"
+                $configPath = Join-Path -Path $extractPath -ChildPath "flyway.toml"
+                $cleandbsReportPath = Join-Path -Path $extractPath -ChildPath "Reports" -AdditionalChildPath "CleanDB"
+                $vScriptsReportPath = Join-Path -Path $extractPath -ChildPath "Reports" -AdditionalChildPath "ValidateVScripts"
+                $uScriptsReportPath = Join-Path -Path $extractPath -ChildPath "Reports" -AdditionalChildPath "ValidateUScripts"
+                Write-Verbose "MP $migrationsPath" 
+                Write-Verbose $([system.String]::Join("`n", $(Get-ChildItem $migrationsPath | %{$_.Name})))
+                
+                flyway -user="$user" -password="$password" -locations="filesystem:$migrationsPath" -baselineOnMigrate="true" -licenseKey="$flyway_license_key" -configFiles="$configPath" info clean info -url="$env_JDBC" -cleanDisabled='false' -reportFilename="$cleandbsReportPath"
+                
+                Write-Verbose $([system.String]::Join("`n", $(Get-ChildItem $migrationsPath | %{$_.Name})))
+                flyway -user="$user" -locations="filesystem:$migrationsPath" -password="$password" -baselineOnMigrate="true" -licenseKey="$flyway_license_key" -configFiles="$configPath" info migrate info -url="$env_JDBC" -cleanDisabled='false' -reportFilename="$vScriptsReportPath"
+                
+                flyway -user="$user" -locations="filesystem:$migrationsPath" -password="$password" -baselineOnMigrate="true" -licenseKey="$flyway_license_key" -configFiles="$configPath" info undo info -url="$env_JDBC" -cleanDisabled='false' -target="$FIRST_UNDO_SCRIPT" -reportFilename="$uScriptsReportPath"
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "PowerShell"
+            OctopusUseBundledTooling = "False"
+        }
+        worker_pool_variable = "Flyway.Octopus.Workerpool"
+
+        packages "AutoOctopus" {
+            acquisition_location = "ExecutionTarget"
+            feed = "github-release"
+            package_id = "#{GitHub.Repo.ID}"
+            properties = {
+                Extract = "True"
+                Purpose = ""
+                SelectionMode = "immediate"
+            }
+        }
+    }
+}
+
+step "report-creation-prodution-release" {
+    condition = "Always"
+    name = "Report Creation - Prodution Release"
+
+    action {
+        action_type = "Octopus.Script"
+        environments = ["staging"]
+        is_required = true
+        properties = {
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                cd "AutoOctopus"
+                $flyway_license_key = $OctopusParameters["Flyway.Settings.LicenseKey"]
+                $env_JDBC = "jdbc:sqlserver://$($OctopusParameters["Flyway.Database.Server"]);authentication=sqlPassword;databaseName=WidgetProd;encrypt=true;trustServerCertificate=true"
+                $FIRST_UNDO_SCRIPT = "002.20230703112421"
+                $user = $OctopusParameters["Flyway.Database.User"]
+                $password = $OctopusParameters["Flyway.Database.Password"]
+                $FailOnDrift = "false"
+                $buildUrl = "jdbc:sqlserver://$($OctopusParameters["Flyway.Database.Server"]);authentication=sqlPassword;databaseName=WidgetZCheck;encrypt=true;trustServerCertificate=true"
+                
+                
+                $extractPath = $OctopusParameters["Octopus.Action.Package[AutoOctopus].ExtractedPath"]
+                Write-Verbose $extractPath
+                $migrationsPath = Join-Path $extractPath -ChildPath "migrations"
+                $configPath = Join-Path -Path $extractPath -ChildPath "flyway.toml"
+                $reportPath = Join-Path -Path $extractPath -ChildPath "Reports" -AdditionalChildPath "ProdReport.html"
+                Write-Verbose "MP $migrationsPath" 
+                Write-Verbose $([system.String]::Join("`n", $(Get-ChildItem $migrationsPath | %{$_.Name})))
+                
+                flyway check -dryrun -changes -drift migrate info -locations="filesystem:$migrationsPath" -baselineOnMigrate="true" -licenseKey="$flyway_license_key" -configFiles="$configPath" "-check.failOnDrift=$FailOnDrift" "-check.buildUrl=$buildUrl" "-check.buildUser=$user" "-check.buildPassword=$password" -url="$env_JDBC" -reportFilename="$reportPath" -user="$user" -password="$password"
+                
+                New-OctopusArtifact -Name "ProdReport.html" -Path $reportPath
+                
+                #Copy-Item -Path "$extractPath\Reports\ProdReport.html" -Destination C:\Users\redgate\Desktop\ProdReport.html
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "PowerShell"
+            OctopusUseBundledTooling = "False"
+        }
+        worker_pool_variable = "Flyway.Octopus.Workerpool"
+
+        packages "AutoOctopus" {
+            acquisition_location = "Server"
+            feed = "github-release"
+            package_id = "#{GitHub.Repo.ID}"
+            properties = {
+                Extract = "True"
+                Purpose = ""
+                SelectionMode = "immediate"
+            }
+        }
+    }
+}
+
+step "production-deployment" {
+    condition = "Always"
+    name = "Production Deployment"
+
+    action {
+        action_type = "Octopus.Script"
+        environments = ["production"]
+        is_required = true
+        properties = {
+            Octopus.Action.Script.ScriptBody = <<-EOT
+                cd "AutoOctopus"
+                $flyway_license_key = $OctopusParameters["Flyway.Settings.LicenseKey"]
+                $env_JDBC = "jdbc:sqlserver://$($OctopusParameters["Flyway.Database.Server"]);authentication=sqlPassword;databaseName=WidgetProd;encrypt=true;trustServerCertificate=true"
+                $FIRST_UNDO_SCRIPT = "002.20230703112421"
+                $user = $OctopusParameters["Flyway.Database.User"]
+                $password = $OctopusParameters["Flyway.Database.Password"]
+                
+                $extractPath = $OctopusParameters["Octopus.Action.Package[AutoOctopus].ExtractedPath"]
+                Write-Verbose $extractPath
+                $migrationsPath = Join-Path -Path $extractPath -ChildPath "migrations"
+                $extractPath = Join-Path -Path $extractPath -ChildPath "flyway.toml"
+                $reportPath = Join-Path -Path $extractPath -ChildPath "Reports" -AdditionalChildPath "CleanDB"
+                Write-Verbose "MP $migrationsPath" 
+                Write-Verbose $([system.String]::Join("`n", $(Get-ChildItem $migrationsPath | %{$_.Name})))
+                
+                
+                flyway -user="$user" -password="$password" -baselineOnMigrate="true" -licenseKey="$flyway_license_key" -configFiles="$extractPath" -locations="filesystem:$migrationsPath" info migrate info -url="$env_JDBC" -cleanDisabled='false' -reportFilename="$reportPath"
+                
+                
+                EOT
+            Octopus.Action.Script.ScriptSource = "Inline"
+            Octopus.Action.Script.Syntax = "PowerShell"
+            OctopusUseBundledTooling = "False"
+        }
+        worker_pool_variable = "Flyway.Octopus.Workerpool"
+
+        packages "AutoOctopus" {
+            acquisition_location = "Server"
+            feed = "github-release"
+            package_id = "#{GitHub.Repo.ID}"
+            properties = {
+                Extract = "True"
+                Purpose = ""
+                SelectionMode = "immediate"
+            }
+        }
+    }
+}
