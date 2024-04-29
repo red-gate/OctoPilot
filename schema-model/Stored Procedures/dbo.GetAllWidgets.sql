@@ -7,7 +7,8 @@ CREATE   PROCEDURE [dbo].[GetAllWidgets]
 AS
 BEGIN
 	SELECT RecordID,
-           Description 
+           Description,
+		   color	
 	FROM Widgets
 END
 GO
