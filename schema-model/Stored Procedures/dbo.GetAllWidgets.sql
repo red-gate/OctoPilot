@@ -6,6 +6,7 @@ GO
 CREATE   PROCEDURE [dbo].[GetAllWidgets]
 AS
 BEGIN
+--comment
 	SELECT RecordID,
            Description,
 		   color	
