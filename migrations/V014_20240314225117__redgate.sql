@@ -8,7 +8,7 @@ GO
 ALTER   PROCEDURE [dbo].[GetAllWidgets]
 AS
 BEGIN
---comment
+--comment Drop Table
 	SELECT RecordID,
            Description 
 	FROM Widgets
