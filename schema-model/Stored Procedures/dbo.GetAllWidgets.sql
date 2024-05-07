@@ -6,7 +6,8 @@ GO
 CREATE   PROCEDURE [dbo].[GetAllWidgets]
 AS
 BEGIN
-	SELECT RecordID,
+	SELECT Cen_Reg_Num,
+		RecordID,
            Description 
 	FROM Widgets
 END
