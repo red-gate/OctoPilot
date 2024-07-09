@@ -10,10 +10,6 @@ PRINT N'Dropping [dbo].[States]'
 GO
 DROP TABLE [dbo].[States]
 GO
-PRINT N'Dropping [dbo].[HuxTest]'
-GO
-DROP TABLE [dbo].[HuxTest]
-GO
 PRINT N'Altering [dbo].[WidgetPrices]'
 GO
 ALTER TABLE [dbo].[WidgetPrices] ALTER COLUMN [Price] [decimal] (19, 4) NULL
