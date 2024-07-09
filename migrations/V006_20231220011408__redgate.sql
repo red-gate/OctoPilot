@@ -12,12 +12,6 @@ EXEC sp_refreshview N'[dbo].[CurrentPrices]'
 GO
 PRINT N'Creating [dbo].[HuxTest]'
 GO
-CREATE TABLE [dbo].[HuxTest]
-(
-[Hux] [nchar] (10) NULL,
-[Test] [nchar] (10) NULL
-)
-GO
 PRINT N'Creating [dbo].[States]'
 GO
 CREATE TABLE [dbo].[States]
