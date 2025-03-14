@@ -4,6 +4,7 @@ databaseType = "SqlServer"
 
 [environments.development]
 url = "jdbc:sqlserver://localhost;databaseName=WidgetDev;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+schemas = [ ]
 displayName = "Development database"
 
 [environments.shadow]
@@ -11,10 +12,23 @@ url = "jdbc:sqlserver://localhost;databaseName=WidgetZShadow;encrypt=true;integr
 displayName = "Shadow database"
 provisioner = "clean"
 
-[environments.production]
+[environments.Prod]
 url = "jdbc:sqlserver://localhost;databaseName=WidgetProd;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
-schemas = [ ]
-displayName = "Production"
+displayName = "Production Database"
+
+[environments.Test]
+url = "jdbc:sqlserver://localhost;databaseName=WidgetTest;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+displayName = "Test database"
+
+[environments.Check]
+url = "jdbc:sqlserver://localhost;databaseName=WidgetZCheck;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+displayName = "Check (Reporting) database"
+provisioner = "clean"
+
+[environments.Build]
+url = "jdbc:sqlserver://localhost;databaseName=WidgetZBuild;encrypt=true;integratedSecurity=true;trustServerCertificate=true"
+displayName = "Build database"
+provisioner = "clean"
 
 [flyway]
 locations = [ "filesystem:migrations" ]
